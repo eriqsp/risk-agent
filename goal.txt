@@ -1,0 +1,7 @@
+--------------- First version ---------------
+
+Build an AI agent that answers questions about the financial risk of a portfolio.
+
+Example
+User input: "What is the annualized volatility of my portfolio?"
+LLM output: "Your portfolio's annualized volatility is 18.4%."
