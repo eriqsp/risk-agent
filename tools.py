@@ -1,104 +1,163 @@
 import numpy as np
-import yfinance as yf
 from langchain.tools import tool
-from data import portfolio
+from data import get_historical_returns
 
 
-@tool
-def calculate_portfolio_volatility():
-    """
-    Calculate the annualized volatility of the current portfolio
-    using one year of daily historical prices.
-    """
+def create_tools(portfolio):
 
-    tickers = list(portfolio.keys())
+    @tool
+    def calculate_portfolio_volatility():
+        """
+        Calculate the annualized volatility of the current portfolio
+        using one year of daily historical returns.
+        """
 
-    # Get historical prices
-    prices = yf.download(
-        tickers,
-        period="1y",
-        auto_adjust=True,
-        progress=False
-    )["Close"]
+        returns = get_historical_returns(portfolio)
 
-    # Calculate daily asset returns
-    returns = prices.pct_change().dropna()
+        weights = np.array([
+            portfolio.weights[ticker]
+            for ticker in returns.columns
+        ])
 
-    # Calculate portfolio returns
-    portfolio_returns = sum(
-        returns[ticker] * weight
-        for ticker, weight in portfolio.items()
-    )
+        covariance_matrix = returns.cov()
 
-    # Calculate annualized volatility
-    daily_volatility = np.std(
-        portfolio_returns,
-        ddof=1
-    )
+        portfolio_variance = (
+            weights
+            @ covariance_matrix.values
+            @ weights
+        )
 
-    annualized_volatility = daily_volatility * np.sqrt(252)
+        portfolio_volatility = np.sqrt(portfolio_variance)
 
-    return float(annualized_volatility)
+        return float(portfolio_volatility * np.sqrt(252))
 
 
-@tool
-def calculate_asset_correlations():
-    """
-    Calculate the correlation matrix between the assets
-    in the current portfolio using one year of daily returns.
-    """
+    @tool
+    def calculate_asset_correlations():
+        """
+        Calculate the correlation matrix between the assets
+        in the current portfolio using one year of daily returns.
+        """
 
-    tickers = list(portfolio.keys())
+        returns = get_historical_returns(portfolio)
 
-    prices = yf.download(
-        tickers,
-        period="1y",
-        auto_adjust=True,
-        progress=False
-    )["Close"]
+        correlation = returns.corr()
 
-    returns = prices.pct_change().dropna()
-
-    correlation = returns.corr()
-
-    return correlation.to_dict()
+        return correlation.to_dict()
 
 
-@tool
-def stress_test(shocks: dict[str, float]) -> float:
-    """
-    Calculate the percentage impact on the portfolio given
-    hypothetical percentage price changes for each asset.
+    @tool
+    def stress_test(shocks: dict[str, float]) -> float:
+        """
+        Calculate the percentage impact on the portfolio given
+        hypothetical percentage price changes for each asset.
 
-    shocks should contain asset tickers as keys and percentage
-    changes as decimal values.
+        shocks should contain asset tickers as keys and percentage
+        changes as decimal values.
 
-    Example:
-    {"AAPL": -0.20, "MSFT": -0.10, "GOOG": -0.15}
-    """
+        Example:
+        {"AAPL": -0.20, "MSFT": -0.10, "GOOG": -0.15}
+        """
 
-    portfolio_return = 0.0
+        portfolio_return = 0.0
 
-    for ticker, shock in shocks.items():
+        for ticker, shock in shocks.items():
 
-        if ticker not in portfolio:
+            if ticker not in portfolio.weights:
+                raise ValueError(
+                    f"{ticker} is not in the portfolio."
+                )
+
+            portfolio_return += portfolio.weights[ticker] * shock
+
+        return portfolio_return
+
+
+    @tool
+    def get_portfolio() -> dict[str, float]:
+        """
+        Return the current portfolio holdings and their weights.
+        """
+
+        return portfolio.weights
+
+
+    @tool
+    def calculate_risk_contribution() -> dict[str, float]:
+        """
+        Calculate each asset's contribution to portfolio volatility
+        using one year of daily historical returns.
+        """
+
+        returns = get_historical_returns(portfolio)
+
+        tickers = list(returns.columns)
+
+        covariance_matrix = returns.cov()
+
+        weights = np.array([
+            portfolio.weights[ticker]
+            for ticker in tickers
+        ])
+
+        portfolio_variance = (
+            weights
+            @ covariance_matrix.values
+            @ weights
+        )
+
+        portfolio_volatility = np.sqrt(portfolio_variance)
+
+        marginal_contribution = (
+            covariance_matrix.values @ weights
+        ) / portfolio_volatility
+
+        component_contribution = (
+            weights * marginal_contribution
+        )
+
+        component_contribution *= np.sqrt(252)
+
+        return {
+            ticker: float(component_contribution[i])
+            for i, ticker in enumerate(tickers)
+        }
+
+
+    @tool
+    def calculate_historical_var(confidence_level: float = 0.95) -> float:
+        """
+        Calculate the portfolio's 1-day historical Value at Risk.
+        """
+
+        if not 0 < confidence_level < 1:
             raise ValueError(
-                f"{ticker} is not in the portfolio."
+                "confidence_level must be between 0 and 1."
             )
 
-        portfolio_return += portfolio[ticker] * shock
+        returns = get_historical_returns(portfolio)
 
-    return portfolio_return
+        weights = np.array([
+            portfolio.weights[ticker]
+            for ticker in returns.columns
+        ])
 
+        portfolio_returns = returns.values @ weights
 
-if __name__ == "__main__":
+        percentile = (1 - confidence_level) * 100
 
-    result = stress_test.invoke({
-        "shocks": {
-            "AAPL": -0.20,
-            "MSFT": -0.10,
-            "GOOG": -0.15
-        }
-    })
+        var = -np.percentile(
+            portfolio_returns,
+            percentile
+        )
 
-    print(result)
+        return float(var)
+
+    return [
+        get_portfolio,
+        calculate_portfolio_volatility,
+        calculate_asset_correlations,
+        calculate_risk_contribution,
+        calculate_historical_var,
+        stress_test
+    ]
