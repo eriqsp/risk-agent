@@ -1,13 +1,13 @@
 from dotenv import load_dotenv
-from portfolio import load_portfolio
-from tools import create_tools
-from agent import create_risk_agent
+from data.portfolio import load_portfolio
+from agent.tools import create_tools
+from agent.agent import create_risk_agent
 
 
 load_dotenv()
 
 
-portfolio = load_portfolio('portfolio.txt')
+portfolio = load_portfolio('data/portfolio.txt')
 tools = create_tools(portfolio)
 agent = create_risk_agent(tools)
 

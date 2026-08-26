@@ -22,7 +22,6 @@ class Portfolio:
 
 def ticker_exists(ticker):
     try:
-
         data = yf.download(
             ticker,
             period="5d",

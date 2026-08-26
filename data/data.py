@@ -1,12 +1,7 @@
 import yfinance as yf
-import pandas as pd
 
 
-def get_historical_returns(
-    portfolio,
-    period="1y"
-):
-
+def get_historical_returns(portfolio, period="1y"):
     tickers = portfolio.tickers()
 
     prices = yf.download(

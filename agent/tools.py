@@ -1,6 +1,6 @@
 import numpy as np
 from langchain.tools import tool
-from data import get_historical_returns
+from data.data import get_historical_returns
 
 
 def create_tools(portfolio):
