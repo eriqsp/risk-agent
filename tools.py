@@ -6,13 +6,25 @@ from data import get_historical_returns
 def create_tools(portfolio):
 
     @tool
-    def calculate_portfolio_volatility():
+    def calculate_portfolio_volatility(period: str = "1y") -> float:
         """
-        Calculate the annualized volatility of the current portfolio
-        using one year of daily historical returns.
+        Calculate the annualized volatility of the portfolio.
+
+        Args:
+            period: Historical data period to use.
+                    Examples: "1y", "2y", "3y", "5y".
+                    Default is "1y".
         """
 
-        returns = get_historical_returns(portfolio)
+        allowed_periods = ["1y", "2y", "3y", '4y', "5y"]
+
+        if period not in allowed_periods:
+            raise ValueError(
+                f"Invalid period '{period}'. "
+                f"Choose from: {allowed_periods}"
+            )
+
+        returns = get_historical_returns(portfolio, period=period)
 
         weights = np.array([
             portfolio.weights[ticker]
@@ -27,10 +39,9 @@ def create_tools(portfolio):
             @ weights
         )
 
-        portfolio_volatility = np.sqrt(portfolio_variance)
+        volatility = np.sqrt(portfolio_variance)
 
-        return float(portfolio_volatility * np.sqrt(252))
-
+        return float(volatility * np.sqrt(252))
 
     @tool
     def calculate_asset_correlations():
@@ -44,7 +55,6 @@ def create_tools(portfolio):
         correlation = returns.corr()
 
         return correlation.to_dict()
-
 
     @tool
     def stress_test(shocks: dict[str, float]) -> float:
@@ -72,7 +82,6 @@ def create_tools(portfolio):
 
         return portfolio_return
 
-
     @tool
     def get_portfolio() -> dict[str, float]:
         """
@@ -80,7 +89,6 @@ def create_tools(portfolio):
         """
 
         return portfolio.weights
-
 
     @tool
     def calculate_risk_contribution() -> dict[str, float]:
@@ -123,9 +131,8 @@ def create_tools(portfolio):
             for i, ticker in enumerate(tickers)
         }
 
-
     @tool
-    def calculate_historical_var(confidence_level: float = 0.95) -> float:
+    def calculate_historical_var(confidence_level: float = 0.95, period: str = "1y") -> float:
         """
         Calculate the portfolio's 1-day historical Value at Risk.
         """
@@ -135,7 +142,22 @@ def create_tools(portfolio):
                 "confidence_level must be between 0 and 1."
             )
 
-        returns = get_historical_returns(portfolio)
+        allowed_confidence_levels = [0.95, 0.975, 0.99]
+        allowed_periods = ["1y", "2y", "3y", '4y', "5y"]
+
+        if confidence_level not in allowed_confidence_levels:
+            raise ValueError(
+                f"Invalid confidence level: {confidence_level}. "
+                f"Choose from {allowed_confidence_levels}."
+            )
+
+        if period not in allowed_periods:
+            raise ValueError(
+                f"Invalid period: {period}. "
+                f"Choose from {allowed_periods}."
+            )
+
+        returns = get_historical_returns(portfolio, period=period)
 
         weights = np.array([
             portfolio.weights[ticker]

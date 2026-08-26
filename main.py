@@ -2,14 +2,14 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 
-from portfolio import create_portfolio
+from portfolio import load_portfolio
 from tools import create_tools
 
 
 load_dotenv()
 
 
-portfolio = create_portfolio()
+portfolio = load_portfolio('portfolio.txt')
 tools = create_tools(portfolio)
 
 

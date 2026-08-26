@@ -36,60 +36,57 @@ def ticker_exists(ticker):
         return False
 
 
-def create_portfolio():
-    print("Enter your portfolio.")
-    print("Press Enter without a ticker when you are finished.\n")
-
+def load_portfolio(filename="portfolio.txt"):
     weights = {}
-    while True:
-        ticker = input(
-            "Ticker (or press Enter to finish): "
-        ).strip().upper()
 
-        if ticker == "":
-            break
+    with open(filename, "r") as file:
+        for line_number, line in enumerate(file, start=1):
 
-        if not ticker_exists(ticker):
-            print(
-                f"Could not find historical data for '{ticker}'. "
-                "Please enter a valid ticker.\n"
-            )
+            line = line.strip()
 
-            continue
+            if not line:
+                continue
 
-        if ticker in weights:
-            print(
-                f"{ticker} has already been added.\n"
-            )
+            if line.startswith("#"):
+                continue
 
-            continue
+            parts = line.split(',')
 
-        weight = 0
-        while True:
-            weight_input = input(
-                f"Weight for {ticker} (%): "
-            ).strip()
+            if len(parts) != 2:
+                raise ValueError(
+                    f"Invalid format on line {line_number}: "
+                    f"'{line}'"
+                )
+
+            ticker = parts[0].strip().upper()
+            weight_string = parts[1].strip()
 
             try:
-                weight = float(weight_input)
+                weight = float(weight_string)
 
             except ValueError:
-                print(
-                    "Invalid weight. "
-                    "Please enter a number, e.g. 25 or 25.5.\n"
+                raise ValueError(
+                    f"Invalid weight on line {line_number}: "
+                    f"'{weight_string}'"
                 )
-
-                continue
 
             if weight < 0:
-                print(
-                    "Weight cannot be negative.\n"
+                raise ValueError(
+                    f"Weight cannot be negative "
+                    f"(line {line_number})."
                 )
 
-                continue
+            if not ticker_exists(ticker):
+                raise ValueError(
+                    f"Invalid or unknown ticker '{ticker}' "
+                    f"(line {line_number})."
+                )
 
-            break
+            if ticker in weights:
+                raise ValueError(
+                    f"Ticker '{ticker}' appears more than once."
+                )
 
-        weights[ticker] = weight / 100
+            weights[ticker] = weight
 
     return Portfolio(weights)
