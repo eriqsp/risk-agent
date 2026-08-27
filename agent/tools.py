@@ -3,20 +3,30 @@ from langchain.tools import tool
 from data.data import get_historical_returns
 
 
-def create_tools(portfolio):
+def create_tools(portfolio_history):
+    allowed_periods = ["1y", "2y", "3y", "4y", "5y"]
+
+    def resolve_portfolio(date: str | None):
+        if date is None:
+            return portfolio_history.latest_portfolio()
+
+        return portfolio_history.get_portfolio(date)
 
     @tool
-    def calculate_portfolio_volatility(period: str = "1y") -> float:
+    def calculate_portfolio_volatility(date: str | None = None, period: str = "1y") -> float:
         """
-        Calculate the annualized volatility of the portfolio.
+        Calculate the annualized volatility of the portfolio as of a given date.
 
         Args:
-            period: Historical data period to use.
-                    Examples: "1y", "2y", "3y", "5y".
-                    Default is "1y".
-        """
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
 
-        allowed_periods = ["1y", "2y", "3y", '4y', "5y"]
+            period:
+                Historical lookback used to estimate volatility.
+                Examples: "1y", "2y", "3y", "5y".
+        """
 
         if period not in allowed_periods:
             raise ValueError(
@@ -25,10 +35,11 @@ def create_tools(portfolio):
             )
 
         try:
+            portfolio = resolve_portfolio(date)
             returns = get_historical_returns(portfolio, period=period)
 
             weights = np.array([
-                portfolio.weights[ticker]
+                portfolio.positions[ticker]
                 for ticker in returns.columns
             ])
 
@@ -47,13 +58,20 @@ def create_tools(portfolio):
             raise RuntimeError(f"Unable to calculate portfolio volatility: {e}")
 
     @tool
-    def calculate_asset_correlations():
+    def calculate_asset_correlations(date: str | None = None):
         """
         Calculate the correlation matrix between the assets
         in the current portfolio using one year of daily returns.
+
+        Args:
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
         """
 
         try:
+            portfolio = resolve_portfolio(date)
             returns = get_historical_returns(portfolio)
 
             correlation = returns.corr()
@@ -63,21 +81,35 @@ def create_tools(portfolio):
             raise RuntimeError(f"Unable to compute assets correlations: {e}")
 
     @tool
-    def get_portfolio() -> dict[str, float]:
+    def get_portfolio(date: str | None = None) -> dict[str, float]:
         """
         Return the current portfolio holdings and their weights.
+
+        Args:
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
         """
 
-        return portfolio.weights
+        portfolio = resolve_portfolio(date)
+        return portfolio.positions
 
     @tool
-    def calculate_risk_contribution() -> dict[str, float]:
+    def calculate_risk_contribution(date: str | None = None) -> dict[str, float]:
         """
         Calculate each asset's contribution to portfolio volatility
         using one year of daily historical returns.
+
+        Args:
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
         """
 
         try:
+            portfolio = resolve_portfolio(date)
             returns = get_historical_returns(portfolio)
 
             tickers = list(returns.columns)
@@ -85,7 +117,7 @@ def create_tools(portfolio):
             covariance_matrix = returns.cov()
 
             weights = np.array([
-                portfolio.weights[ticker]
+                portfolio.positions[ticker]
                 for ticker in tickers
             ])
 
@@ -115,7 +147,7 @@ def create_tools(portfolio):
             raise RuntimeError(f"Unable to calculate risk contribution: {e}")
 
     @tool
-    def calculate_historical_var(confidence_level: float = 0.95, period: str = "1y") -> float:
+    def calculate_historical_var(date: str | None = None, confidence_level: float = 0.95, period: str = "1y") -> float:
         """
         Calculate the portfolio's 1-day historical Value at Risk.
         """
@@ -126,7 +158,6 @@ def create_tools(portfolio):
             )
 
         allowed_confidence_levels = [0.95, 0.975, 0.99]
-        allowed_periods = ["1y", "2y", "3y", '4y', "5y"]
 
         if confidence_level not in allowed_confidence_levels:
             raise ValueError(
@@ -141,10 +172,11 @@ def create_tools(portfolio):
             )
 
         try:
+            portfolio = resolve_portfolio(date)
             returns = get_historical_returns(portfolio, period=period)
 
             weights = np.array([
-                portfolio.weights[ticker]
+                portfolio.positions[ticker]
                 for ticker in returns.columns
             ])
 
@@ -162,11 +194,15 @@ def create_tools(portfolio):
             raise RuntimeError(f"Unable to calculate historical VaR: {e}")
 
     @tool
-    def stress_test_portfolio(scenario: dict[str, float]) -> float:
+    def stress_test_portfolio(scenario: dict[str, float], date: str | None = None) -> float:
         """
         Calculate the portfolio return under a hypothetical stress scenario.
 
         Args:
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
             scenario: Dictionary mapping ticker symbols to hypothetical
                       returns. Returns must be expressed as decimals.
 
@@ -183,7 +219,8 @@ def create_tools(portfolio):
             The hypothetical portfolio return.
         """
 
-        unknown_assets = set(scenario) - set(portfolio.weights)
+        portfolio = resolve_portfolio(date)
+        unknown_assets = set(scenario) - set(portfolio.positions)
 
         if unknown_assets:
             raise ValueError(
@@ -192,23 +229,26 @@ def create_tools(portfolio):
             )
 
         portfolio_return = sum(
-            portfolio.weights[ticker] * scenario.get(ticker, 0.0)
-            for ticker in portfolio.weights
+            portfolio.positions[ticker] * scenario.get(ticker, 0.0)
+            for ticker in portfolio.positions
         )
 
         return float(portfolio_return)
 
     @tool
-    def calculate_max_drawdown(period: str = "1y") -> float:
+    def calculate_max_drawdown(date: str | None = None, period: str = "1y") -> float:
         """
         Calculate the maximum drawdown of the portfolio.
 
         Args:
+            date:
+                Portfolio evaluation date in YYYY-MM-DD format.
+                The portfolio composition effective on or immediately
+                before this date will be used.
+
             period: Historical period. Valid values are
                     "1y", "2y", "3y", and "5y".
         """
-
-        allowed_periods = ["1y", "2y", "3y", "5y"]
 
         if period not in allowed_periods:
             raise ValueError(
@@ -217,10 +257,11 @@ def create_tools(portfolio):
             )
 
         try:
+            portfolio = resolve_portfolio(date)
             returns = get_historical_returns(portfolio, period=period)
 
             weights = np.array([
-                portfolio.weights[ticker]
+                portfolio.positions[ticker]
                 for ticker in returns.columns
             ])
 

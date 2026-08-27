@@ -1,6 +1,0 @@
-# ticker - weight
-
-AAPL,0.40
-MSFT,0.35
-GOOG,0.15
-TSLA,0.10

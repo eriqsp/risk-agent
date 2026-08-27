@@ -1,91 +1,56 @@
-import yfinance as yf
+import pandas as pd
 
 
 class Portfolio:
-    def __init__(self, weights):
-        if not weights:
-            raise ValueError("Portfolio cannot be empty.")
-
-        if any(weight < 0 for weight in weights.values()):
-            raise ValueError("Portfolio weights cannot be negative.")
-
-        if abs(sum(weights.values()) - 1.0) > 1e-6:
-            raise ValueError(
-                "Portfolio weights must sum to 100%."
-            )
-
-        self.weights = weights
+    def __init__(self, date, positions):
+        self.date = pd.Timestamp(date)
+        self.positions = positions
 
     def tickers(self):
-        return list(self.weights.keys())
+        return list(self.positions.keys())
+
+    def weights(self):
+        return self.positions
+
+    def __repr__(self):
+        return f"Portfolio(date={self.date.date()}, positions={self.positions})"
 
 
-def ticker_exists(ticker):
-    try:
-        data = yf.download(
-            ticker,
-            period="5d",
-            progress=False,
-            auto_adjust=True
-        )
+class PortfolioHistory:
+    def __init__(self, dataframe):
+        self.df = dataframe.copy()
+        self.df["date"] = pd.to_datetime(self.df["date"])
 
-        return not data.empty
+    def dates(self):
+        return sorted(self.df["date"].unique())
 
-    except Exception:
-        return False
+    def get_portfolio(self, date):
+        date = pd.Timestamp(date)
+
+        valid_dates = self.df.loc[self.df["date"] <= date, "date"]
+
+        if valid_dates.empty:
+            raise ValueError(f"No portfolio available on or before {date.date()}")
+
+        portfolio_date = valid_dates.max()
+
+        df_date = self.df[self.df["date"] == portfolio_date]
+
+        positions = dict(zip(df_date["asset"], df_date["weight"]))
+
+        return Portfolio(date=portfolio_date, positions=positions)
+
+    def latest_portfolio(self):
+        latest_date = self.df["date"].max()
+        return self.get_portfolio(latest_date)
 
 
-def load_portfolio(filename="portfolio.txt"):
-    weights = {}
+def load_portfolio_history(filepath="portfolio.csv"):
+    df = pd.read_csv(filepath)
 
-    with open(filename, "r") as file:
-        for line_number, line in enumerate(file, start=1):
+    required_columns = {"date", "asset", "weight"}
 
-            line = line.strip()
+    if not required_columns.issubset(df.columns):
+        raise ValueError(f"CSV must contain columns: {required_columns}")
 
-            if not line:
-                continue
-
-            if line.startswith("#"):
-                continue
-
-            parts = line.split(',')
-
-            if len(parts) != 2:
-                raise ValueError(
-                    f"Invalid format on line {line_number}: "
-                    f"'{line}'"
-                )
-
-            ticker = parts[0].strip().upper()
-            weight_string = parts[1].strip()
-
-            try:
-                weight = float(weight_string)
-
-            except ValueError:
-                raise ValueError(
-                    f"Invalid weight on line {line_number}: "
-                    f"'{weight_string}'"
-                )
-
-            if weight < 0:
-                raise ValueError(
-                    f"Weight cannot be negative "
-                    f"(line {line_number})."
-                )
-
-            if not ticker_exists(ticker):
-                raise ValueError(
-                    f"Invalid or unknown ticker '{ticker}' "
-                    f"(line {line_number})."
-                )
-
-            if ticker in weights:
-                raise ValueError(
-                    f"Ticker '{ticker}' appears more than once."
-                )
-
-            weights[ticker] = weight
-
-    return Portfolio(weights)
+    return PortfolioHistory(df)
