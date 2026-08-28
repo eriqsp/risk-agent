@@ -1,0 +1,223 @@
+-------- GOAL --------
+
+- Compare the LLM output with the python calculations
+
+
+
+-------- QUESTIONS --------
+
+- Run main.py and ask the questions below
+
+
+“What is my latest portfolio?”
+“What was my portfolio on March 15, 2026?”
+“What was my 1-year annualized volatility on March 1, 2026?”
+“Compare my 1-year volatility on March 1, 2026 and August 1, 2026.”
+“What was my 99% 1-day historical VaR on August 1, 2026, using 2 years of data?”
+“What was the correlation between AAPL and MSFT on March 1, 2026?”
+“Which asset contributed the most to portfolio volatility on August 1, 2026?”
+“If AAPL fell 20% and MSFT fell 10% on August 1, 2026, what would be the portfolio return?”
+“What was the actual maximum drawdown of my portfolio between September 1, 2025 and August 1, 2026?”
+“On August 1, 2026, give me the portfolio volatility, 95% VaR, and risk contributions.”
+
+
+
+-------- TOOLS --------
+
+- Put this code in tools.py, below everything.
+- Compare the results in tool_test_results.txt with the outputs given by the LLM
+
+
+if __name__ == "__main__":
+
+    from data.portfolio import load_portfolio_history
+
+    portfolio_history = load_portfolio_history("../data/portfolio.csv")
+
+    tools = create_tools(portfolio_history)
+
+    tool_map = {
+        tool.name: tool
+        for tool in tools
+    }
+
+    output = []
+
+    def add_test(title, content):
+        output.append("=" * 60)
+        output.append(title)
+        output.append("=" * 60)
+        output.append(str(content))
+        output.append("")
+
+    # TEST 1
+    result = tool_map["get_portfolio"].invoke({
+        "date": None
+    })
+
+    add_test(
+        "TEST 1 - Latest portfolio",
+        result
+    )
+
+    # TEST 2
+    result = tool_map["get_portfolio"].invoke({
+        "date": "2026-03-15"
+    })
+
+    add_test(
+        "TEST 2 - Portfolio on 2026-03-15",
+        result
+    )
+
+    # TEST 3
+    result = tool_map[
+        "calculate_portfolio_volatility"
+    ].invoke({
+        "date": "2026-03-01",
+        "period": "1y"
+    })
+
+    add_test(
+        "TEST 3 - Volatility on 2026-03-01",
+        result
+    )
+
+    # TEST 4
+    vol_march = tool_map[
+        "calculate_portfolio_volatility"
+    ].invoke({
+        "date": "2026-03-01",
+        "period": "1y"
+    })
+
+    vol_august = tool_map[
+        "calculate_portfolio_volatility"
+    ].invoke({
+        "date": "2026-08-01",
+        "period": "1y"
+    })
+
+    add_test(
+        "TEST 4 - Compare volatility",
+        {
+            "2026-03-01": vol_march,
+            "2026-08-01": vol_august,
+            "difference": vol_august - vol_march
+        }
+    )
+
+    # TEST 5
+    result = tool_map[
+        "calculate_historical_var"
+    ].invoke({
+        "date": "2026-08-01",
+        "confidence_level": 0.99,
+        "period": "2y"
+    })
+
+    add_test(
+        "TEST 5 - 99% historical VaR",
+        result
+    )
+
+    # TEST 6
+    correlations = tool_map[
+        "calculate_asset_correlations"
+    ].invoke({
+        "date": "2026-03-01"
+    })
+
+    add_test(
+        "TEST 6 - AAPL/MSFT correlation",
+        correlations["AAPL"]["MSFT"]
+    )
+
+    # TEST 7
+    contributions = tool_map[
+        "calculate_risk_contribution"
+    ].invoke({
+        "date": "2026-08-01"
+    })
+
+    largest_asset = max(
+        contributions,
+        key=contributions.get
+    )
+
+    add_test(
+        "TEST 7 - Largest risk contributor",
+        {
+            "all_contributions": contributions,
+            "largest_asset": largest_asset,
+            "largest_contribution":
+                contributions[largest_asset]
+        }
+    )
+
+    # TEST 8
+    result = tool_map[
+        "stress_test_portfolio"
+    ].invoke({
+        "date": "2026-08-01",
+        "scenario": {
+            "AAPL": -0.20,
+            "MSFT": -0.10
+        }
+    })
+
+    add_test(
+        "TEST 8 - Stress test",
+        result
+    )
+
+    # TEST 9
+    result = tool_map[
+        "calculate_max_drawdown"
+    ].invoke({
+        "start_date": "2025-09-01",
+        "end_date": "2026-08-01"
+    })
+
+    add_test(
+        "TEST 9 - Actual maximum drawdown",
+        result
+    )
+
+    # TEST 10
+    volatility = tool_map[
+        "calculate_portfolio_volatility"
+    ].invoke({
+        "date": "2026-08-01",
+        "period": "1y"
+    })
+
+    var = tool_map[
+        "calculate_historical_var"
+    ].invoke({
+        "date": "2026-08-01",
+        "confidence_level": 0.95,
+        "period": "1y"
+    })
+
+    contributions = tool_map[
+        "calculate_risk_contribution"
+    ].invoke({
+        "date": "2026-08-01"
+    })
+
+    add_test(
+        "TEST 10 - Multiple risk metrics",
+        {
+            "volatility": volatility,
+            "var_95": var,
+            "risk_contributions": contributions
+        }
+    )
+
+    output_path = "tool_test_results.txt"
+
+    with open(output_path, "w", encoding="utf-8") as file:
+        file.write("\n".join(output))
+
+    print(f"Tests completed. Results saved to {output_path}")

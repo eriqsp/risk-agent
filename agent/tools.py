@@ -281,7 +281,7 @@ def create_tools(portfolio_history):
             portfolio_value = 1.0
             current_portfolio = initial_portfolio
 
-            position_values = {ticker: portfolio_value * weight for ticker, weight in current_portfolio.weights.items()}
+            position_values = {ticker: portfolio_value * weight for ticker, weight in current_portfolio.positions.items()}
 
             wealth = [portfolio_value]
 
@@ -299,7 +299,7 @@ def create_tools(portfolio_history):
                     position_values = {
                         ticker: portfolio_value * weight
                         for ticker, weight
-                        in current_portfolio.weights.items()
+                        in current_portfolio.positions.items()
                     }
 
                 # apply asset price movements
