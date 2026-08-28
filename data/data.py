@@ -10,8 +10,21 @@ def get_historical_returns(portfolio, period="1y", end_date=None):
         end_date = portfolio.date
 
     end_date = pd.Timestamp(end_date)
-
     start_date = end_date - pd.DateOffset(years=get_period(period))
+
+    prices = get_historical_prices(tickers, start_date, end_date)
+
+    returns = prices.pct_change().dropna()
+
+    if returns.empty:
+        raise ValueError("Not enough price data to calculate historical returns")
+
+    return returns
+
+
+def get_historical_prices(tickers, start_date, end_date):
+    start_date = pd.Timestamp(start_date)
+    end_date = pd.Timestamp(end_date)
 
     prices = yf.download(
         tickers,
@@ -22,14 +35,9 @@ def get_historical_returns(portfolio, period="1y", end_date=None):
     )["Close"]
 
     if prices.empty:
-        raise ValueError(f"No price data available between {start_date.date()} and {end_date.date()}")
+        raise ValueError("No price data available.")
 
-    returns = prices.pct_change().dropna()
-
-    if returns.empty:
-        raise ValueError("Not enough price data to calculate historical returns")
-
-    return returns
+    return prices
 
 
 def get_period(period="1y"):

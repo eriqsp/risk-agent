@@ -1,6 +1,7 @@
 import numpy as np
 from langchain.tools import tool
-from data.data import get_historical_returns
+from data.data import get_historical_returns, get_historical_prices
+import pandas as pd
 
 
 def create_tools(portfolio_history):
@@ -236,46 +237,95 @@ def create_tools(portfolio_history):
         return float(portfolio_return)
 
     @tool
-    def calculate_max_drawdown(date: str | None = None, period: str = "1y") -> float:
+    def calculate_max_drawdown(start_date: str | None = None, end_date: str | None = None) -> float:
         """
-        Calculate the maximum drawdown of the portfolio.
+        Calculate the actual historical maximum drawdown of the portfolio.
+
+        Portfolio weights change according to the allocations recorded
+        in the portfolio history.
 
         Args:
-            date:
-                Portfolio evaluation date in YYYY-MM-DD format.
-                The portfolio composition effective on or immediately
-                before this date will be used.
+            start_date:
+                Start date in YYYY-MM-DD format.
+                Defaults to the earliest available portfolio date.
 
-            period: Historical period. Valid values are
-                    "1y", "2y", "3y", and "5y".
+            end_date:
+                End date in YYYY-MM-DD format.
+                Defaults to the latest available portfolio date.
+
+        Returns:
+            Maximum drawdown as a negative decimal.
+            Example: -0.25 means a 25% maximum drawdown.
         """
 
-        if period not in allowed_periods:
-            raise ValueError(
-                f"Invalid period: {period}. "
-                f"Choose from {allowed_periods}."
-            )
-
         try:
-            portfolio = resolve_portfolio(date)
-            returns = get_historical_returns(portfolio, period=period)
+            dates = portfolio_history.dates()
 
-            weights = np.array([
-                portfolio.positions[ticker]
-                for ticker in returns.columns
-            ])
+            start = pd.Timestamp(start_date) if start_date else pd.Timestamp(dates[0])
+            end = pd.Timestamp(end_date) if end_date else pd.Timestamp(dates[-1])
 
-            portfolio_returns = returns @ weights
+            if start >= end:
+                raise ValueError("start_date must be before end_date.")
 
-            cumulative_returns = (1 + portfolio_returns).cumprod()
+            initial_portfolio = portfolio_history.get_portfolio(start)
 
-            running_max = cumulative_returns.cummax()
+            rebalance_dates = [pd.Timestamp(d) for d in dates if start < pd.Timestamp(d) <= end]
 
-            drawdowns = (cumulative_returns / running_max) - 1
+            tickers = set(initial_portfolio.tickers())
 
-            max_drawdown = drawdowns.min()
+            for date in rebalance_dates:
+                tickers.update(portfolio_history.get_portfolio(date).tickers())
 
-            return float(max_drawdown)
+            prices = get_historical_prices(list(tickers), start, end)
+
+            portfolio_value = 1.0
+            current_portfolio = initial_portfolio
+
+            position_values = {ticker: portfolio_value * weight for ticker, weight in current_portfolio.weights.items()}
+
+            wealth = [portfolio_value]
+
+            previous_date = prices.index[0]
+
+            for current_date in prices.index[1:]:
+                # if portfolio changed, rebalance before applying the next day's movement
+                valid_rebalances = [d for d in rebalance_dates if previous_date < d <= current_date]
+
+                if valid_rebalances:
+                    latest_rebalance = max(valid_rebalances)
+
+                    current_portfolio = portfolio_history.get_portfolio(latest_rebalance)
+
+                    position_values = {
+                        ticker: portfolio_value * weight
+                        for ticker, weight
+                        in current_portfolio.weights.items()
+                    }
+
+                # apply asset price movements
+                for ticker in position_values:
+                    previous_price = prices.loc[previous_date, ticker]
+
+                    current_price = prices.loc[current_date, ticker]
+
+                    asset_return = current_price / previous_price - 1
+
+                    position_values[ticker] *= 1 + asset_return
+
+                portfolio_value = sum(position_values.values())
+
+                wealth.append(portfolio_value)
+
+                previous_date = current_date
+
+            wealth = pd.Series(wealth)
+
+            running_max = wealth.cummax()
+
+            drawdown = wealth / running_max - 1
+
+            return float(drawdown.min())
+
         except Exception as e:
             raise RuntimeError(f"Unable to calculate maximum drawdown: {e}")
 

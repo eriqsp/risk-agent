@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 class Portfolio:
@@ -8,9 +9,6 @@ class Portfolio:
 
     def tickers(self):
         return list(self.positions.keys())
-
-    def weights(self):
-        return self.positions
 
     def __repr__(self):
         return f"Portfolio(date={self.date.date()}, positions={self.positions})"
@@ -52,5 +50,17 @@ def load_portfolio_history(filepath="portfolio.csv"):
 
     if not required_columns.issubset(df.columns):
         raise ValueError(f"CSV must contain columns: {required_columns}")
+
+    df["date"] = pd.to_datetime(df["date"])
+
+    weight_sums = df.groupby("date")["weight"].sum()
+
+    invalid = weight_sums[~np.isclose(weight_sums, 1.0)]
+
+    if not invalid.empty:
+        raise ValueError(
+            f"Portfolio weights must sum to 1 for every date. "
+            f"Invalid dates: {list(invalid.index.date)}"
+        )
 
     return PortfolioHistory(df)

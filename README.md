@@ -1,3 +1,5 @@
+### Structure
+
 - portfolio.py 
   - Understands portfolio positions and portfolio dates
 
@@ -15,3 +17,9 @@
 
 - portfolio.csv
   - Stores historical portfolio states
+
+
+### Risk Tools
+
+- Volatility, VaR, risk contribution, correlations, stress test: analyze one portfolio snapshot as of a date
+- Maximum drawdown: follow the portfolio through time, using every weight change in portfolio.csv
