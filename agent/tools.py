@@ -2,6 +2,7 @@ import numpy as np
 from langchain.tools import tool
 from data.data import get_historical_returns, get_historical_prices
 import pandas as pd
+from rag.rag import search_policy
 
 
 def create_tools(portfolio_history):
@@ -12,6 +13,26 @@ def create_tools(portfolio_history):
             return portfolio_history.latest_portfolio()
 
         return portfolio_history.get_portfolio(date)
+
+    @tool
+    def search_risk_policy(query: str) -> list[dict]:
+        """
+        Search the portfolio risk policy for relevant rules, limits,
+        definitions, and compliance requirements.
+
+        Args:
+            query: What to search for in the risk policy.
+        """
+
+        documents = search_policy(query)
+
+        return [
+            {
+                "text": document.page_content,
+                "page": document.metadata.get("page", 0) + 1,
+            }
+            for document in documents
+        ]
 
     @tool
     def calculate_portfolio_volatility(date: str | None = None, period: str = "1y") -> float:
@@ -336,5 +357,6 @@ def create_tools(portfolio_history):
         calculate_risk_contribution,
         calculate_historical_var,
         stress_test_portfolio,
-        calculate_max_drawdown
+        calculate_max_drawdown,
+        search_risk_policy
     ]
