@@ -51,6 +51,6 @@ def load_vector_store():
     )
 
 
-def search_policy(query: str, k: int = 3):
+def search_policy(query: str, k: int = 3):  # k = 3 gives the agent enough surrounding policy information
     vector_store = load_vector_store()
     return vector_store.similarity_search(query, k=k)
